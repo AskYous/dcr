@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { FC, useState } from 'react';
 
 interface DebugPanelProps {
   registryUrl: string;
+  onClose: () => void;
 }
 
-export const DebugPanel = ({ registryUrl }: DebugPanelProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+export const DebugPanel: FC<DebugPanelProps> = ({ registryUrl, onClose }) => {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,31 +29,35 @@ export const DebugPanel = ({ registryUrl }: DebugPanelProps) => {
     }
   };
 
-  if (!isOpen) {
-    return (
-      <button
-        className="debug-toggle"
-        onClick={() => setIsOpen(true)}
-      >
-        Show Debug Panel
-      </button>
-    );
-  }
-
   return (
     <div className="debug-panel">
       <div className="debug-header">
         <h3>Debug Panel</h3>
-        <button onClick={() => setIsOpen(false)}>Close</button>
+        <button
+          onClick={onClose}
+          className="close-button"
+          aria-label="Close debug panel"
+        >
+          ×
+        </button>
       </div>
 
       <div className="debug-content">
-        <p><strong>Registry URL:</strong> {registryUrl}</p>
-        <p><strong>Proxy URL:</strong> /api</p>
+        <div className="debug-info">
+          <div className="info-row">
+            <span className="info-label">Registry URL:</span>
+            <span className="info-value">{registryUrl}</span>
+          </div>
+          <div className="info-row">
+            <span className="info-label">Proxy URL:</span>
+            <span className="info-value">/api</span>
+          </div>
+        </div>
 
         <button
           onClick={testConnection}
           disabled={isLoading}
+          className="test-button"
         >
           {isLoading ? 'Testing...' : 'Test Connection'}
         </button>

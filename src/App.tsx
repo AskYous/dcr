@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import './App.css';
 import { AuthForm } from './components/AuthForm';
 import { DebugPanel } from './components/DebugPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Header } from './components/Header';
 import { ImageList } from './components/ImageList';
 import { useAuth } from './hooks/useAuth';
 import { useDockerRegistry } from './hooks/useDockerRegistry';
 
 const App = () => {
+  const [showDebug, setShowDebug] = useState(false);
+
   const {
     credentials,
     authenticated,
@@ -24,47 +29,40 @@ const App = () => {
   } = useDockerRegistry(credentials, authenticated);
 
   return (
-    <div className="docker-registry-app">
-      <h1>Docker Registry Explorer</h1>
-
-      {!authenticated ? (
-        <AuthForm
-          credentials={credentials}
-          isLoading={isAuthenticating}
-          error={authError}
-          onInputChange={handleInputChange}
-          onSubmit={handleLogin}
+    <ErrorBoundary>
+      <div className="docker-registry-app">
+        <Header
+          authenticated={authenticated}
+          onLogout={handleLogout}
+          onRefresh={refreshImages}
+          isLoading={isLoadingImages}
+          onToggleDebug={() => setShowDebug(!showDebug)}
         />
-      ) : (
-        <div className="registry-content">
-          <div className="header-actions">
-            <button
-              onClick={refreshImages}
-              disabled={isLoadingImages}
-              className="action-button refresh"
-            >
-              {isLoadingImages ? "Refreshing..." : "Refresh Images"}
-            </button>
-            <button
-              onClick={handleLogout}
-              className="action-button logout"
-            >
-              Logout
-            </button>
-          </div>
 
-          <ImageList
-            images={images}
-            isLoading={isLoadingImages}
-            error={imagesError}
-          />
-
-          {authenticated && (
-            <DebugPanel registryUrl={credentials.registryUrl} />
+        <main className="app-content">
+          {!authenticated ? (
+            <AuthForm
+              credentials={credentials}
+              isLoading={isAuthenticating}
+              error={authError}
+              onInputChange={handleInputChange}
+              onSubmit={handleLogin}
+            />
+          ) : (
+            <ImageList
+              images={images}
+              isLoading={isLoadingImages}
+              error={imagesError}
+              registryUrl={credentials.registryUrl}
+            />
           )}
-        </div>
-      )}
-    </div>
+        </main>
+
+        {authenticated && showDebug && (
+          <DebugPanel registryUrl={credentials.registryUrl} onClose={() => setShowDebug(false)} />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 };
 
