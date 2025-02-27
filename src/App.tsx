@@ -56,6 +56,7 @@ const App = () => {
               isLoading={isLoadingImages}
               error={imagesError}
               registryUrl={credentials.registryUrl}
+              onRefresh={refreshImages}
             />
           )}
         </main>

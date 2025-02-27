@@ -1,15 +1,17 @@
 import { FC, useState } from 'react';
 import { DockerImage } from '../types';
 import { ImageDetails } from './ImageDetails';
+import { RegistryHelp } from './RegistryHelp';
 
 interface ImageListProps {
   images: DockerImage[];
   isLoading: boolean;
   error: string | null;
   registryUrl: string;
+  onRefresh: () => void;
 }
 
-export const ImageList: FC<ImageListProps> = ({ images, isLoading, error, registryUrl }) => {
+export const ImageList: FC<ImageListProps> = ({ images, isLoading, error, registryUrl, onRefresh }) => {
   const [selectedImage, setSelectedImage] = useState<DockerImage | null>(null);
 
   const handleImageClick = (image: DockerImage) => {
@@ -46,6 +48,11 @@ export const ImageList: FC<ImageListProps> = ({ images, isLoading, error, regist
 
   return (
     <>
+      <div className="images-header">
+        <h2>Docker Images</h2>
+        <RegistryHelp />
+      </div>
+
       <div className="images-list">
         {images.map((image) => (
           <div
@@ -86,6 +93,7 @@ export const ImageList: FC<ImageListProps> = ({ images, isLoading, error, regist
           image={selectedImage}
           registryUrl={registryUrl}
           onClose={() => setSelectedImage(null)}
+          onImageUpdated={onRefresh}
         />
       )}
     </>

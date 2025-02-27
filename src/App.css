@@ -839,3 +839,116 @@ body {
   border-radius: var(--border-radius);
   margin-left: auto;
 }
+
+/* Delete tag button */
+.delete-tag-button {
+  background-color: rgba(255, 70, 70, 0.1);
+  color: #ff4646;
+  border: 1px solid rgba(255, 70, 70, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.delete-tag-button:hover {
+  background-color: rgba(255, 70, 70, 0.2);
+  border-color: rgba(255, 70, 70, 0.5);
+}
+
+.delete-tag-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 70, 70, 0.5);
+}
+
+/* Confirmation dialog */
+.confirmation-dialog {
+  max-width: 500px;
+}
+
+.confirmation-message {
+  margin-bottom: 2rem;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.action-button.confirm.destructive {
+  background-color: #ff4646;
+  color: white;
+}
+
+.action-button.confirm.destructive:hover {
+  background-color: #e03c3c;
+}
+
+.warning-text {
+  color: #ff4646;
+  font-weight: 500;
+  margin-top: 1rem;
+}
+
+/* Error message */
+.error-message {
+  background-color: rgba(255, 70, 70, 0.1);
+  border: 1px solid rgba(255, 70, 70, 0.3);
+  color: #ff4646;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+}
+
+/* Registry help styles */
+.images-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.registry-help {
+  position: relative;
+}
+
+.help-button {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.help-button:hover {
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.help-modal {
+  max-width: 700px;
+}
+
+.code-block {
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-family: monospace;
+  white-space: pre;
+}
+
+/* Improve error message display */
+.error-message {
+  background-color: rgba(255, 70, 70, 0.1);
+  border: 1px solid rgba(255, 70, 70, 0.3);
+  color: #ff4646;
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}

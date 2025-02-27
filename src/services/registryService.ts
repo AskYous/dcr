@@ -36,11 +36,13 @@ export const registryService = {
   /**
    * Fetches the catalog of images from the registry
    */
-  async fetchImageCatalog(): Promise<string[]> {
+  async fetchImageCatalog(abortSignal?: AbortSignal): Promise<string[]> {
     return apiCache.withCache(
       async () => {
         try {
-          const response = await fetch('/api/v2/_catalog');
+          const response = await fetch('/api/v2/_catalog', {
+            signal: abortSignal
+          });
 
           if (!response.ok) {
             throw new RegistryApiError(
@@ -52,6 +54,12 @@ export const registryService = {
           const data = await response.json();
           return data.repositories || [];
         } catch (error) {
+          // Don't log aborted requests as errors
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            console.log('Fetch catalog request aborted');
+            throw error;
+          }
+
           console.error('Error fetching image catalog:', error);
           if (error instanceof RegistryApiError) {
             throw error;
@@ -68,11 +76,13 @@ export const registryService = {
   /**
    * Fetches tags for a specific image
    */
-  async fetchImageTags(imageName: string): Promise<string[]> {
+  async fetchImageTags(imageName: string, abortSignal?: AbortSignal): Promise<string[]> {
     return apiCache.withCache(
       async () => {
         try {
-          const response = await fetch(`/api/v2/${imageName}/tags/list`);
+          const response = await fetch(`/api/v2/${imageName}/tags/list`, {
+            signal: abortSignal
+          });
 
           if (!response.ok) {
             throw new RegistryApiError(
@@ -84,6 +94,12 @@ export const registryService = {
           const data = await response.json();
           return data.tags || [];
         } catch (error) {
+          // Don't log aborted requests as errors
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            console.log(`Fetch tags request aborted for ${imageName}`);
+            throw error;
+          }
+
           console.error(`Error fetching tags for ${imageName}:`, error);
           if (error instanceof RegistryApiError) {
             throw error;
@@ -100,15 +116,24 @@ export const registryService = {
   /**
    * Fetches all images with their tags
    */
-  async fetchAllImages(): Promise<DockerImage[]> {
+  async fetchAllImages(abortSignal?: AbortSignal): Promise<DockerImage[]> {
     try {
-      const repositories = await this.fetchImageCatalog();
+      const repositories = await this.fetchImageCatalog(abortSignal);
 
       const imagesPromises = repositories.map(async (repo) => {
         try {
-          const tags = await this.fetchImageTags(repo);
+          // Check if the request has been aborted before making a new request
+          if (abortSignal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+          }
+
+          const tags = await this.fetchImageTags(repo, abortSignal);
           return { name: repo, tags };
         } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            throw error;
+          }
+
           console.warn(`Error fetching tags for ${repo}:`, error);
           return { name: repo, tags: [] };
         }
@@ -116,6 +141,11 @@ export const registryService = {
 
       return await Promise.all(imagesPromises);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log('Fetch all images request aborted');
+        throw error;
+      }
+
       console.error('Error fetching all images:', error);
       throw error;
     }
@@ -124,14 +154,15 @@ export const registryService = {
   /**
    * Fetches manifest for a specific image tag
    */
-  async fetchImageManifest(imageName: string, tag: string): Promise<ImageManifest> {
+  async fetchImageManifest(imageName: string, tag: string, abortSignal?: AbortSignal): Promise<ImageManifest> {
     return apiCache.withCache(
       async () => {
         try {
           const response = await fetch(`/api/v2/${imageName}/manifests/${tag}`, {
             headers: {
               'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-            }
+            },
+            signal: abortSignal
           });
 
           if (!response.ok) {
@@ -143,6 +174,12 @@ export const registryService = {
 
           return await response.json();
         } catch (error) {
+          // Don't log aborted requests as errors
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            console.log(`Fetch manifest request aborted for ${imageName}:${tag}`);
+            throw error;
+          }
+
           console.error(`Error fetching manifest for ${imageName}:${tag}:`, error);
           if (error instanceof RegistryApiError) {
             throw error;
@@ -189,7 +226,8 @@ export const registryService = {
   async calculateCumulativeImageSize(
     imageName: string,
     tags: string[],
-    accountForSharedLayers: boolean = true
+    accountForSharedLayers: boolean = true,
+    abortSignal?: AbortSignal
   ): Promise<{
     totalSize: number;
     uniqueSize: number;
@@ -205,7 +243,12 @@ export const registryService = {
         // Fetch manifests for all tags
         const manifestPromises = tags.map(async (tag) => {
           try {
-            const manifest = await this.fetchImageManifest(imageName, tag);
+            // Check if the request has been aborted before making a new request
+            if (abortSignal?.aborted) {
+              throw new DOMException('Aborted', 'AbortError');
+            }
+
+            const manifest = await this.fetchImageManifest(imageName, tag, abortSignal);
             const size = this.calculateImageSize(manifest);
             tagSizes[tag] = size;
             totalSize += size;
@@ -221,6 +264,10 @@ export const registryService = {
 
             return manifest;
           } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              throw error;
+            }
+
             console.warn(`Error fetching manifest for ${imageName}:${tag}:`, error);
             return null;
           }
@@ -244,6 +291,53 @@ export const registryService = {
       { tags: tags.join(','), accountForSharedLayers },
       CACHE_TTL.CUMULATIVE
     );
+  },
+
+  /**
+   * Deletes a specific tag from an image
+   * Note: This requires the registry to have delete permissions enabled
+   */
+  async deleteImageTag(imageName: string, tag: string): Promise<boolean> {
+    try {
+      // First, get the manifest to get the digest
+      const manifest = await this.fetchImageManifest(imageName, tag);
+      if (!manifest || !manifest.config?.digest) {
+        throw new Error(`Could not find digest for ${imageName}:${tag}`);
+      }
+
+      // Delete by digest
+      const response = await fetch(`/api/v2/${imageName}/manifests/${manifest.config.digest}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+        }
+      });
+
+      if (!response.ok) {
+        // Handle specific error cases
+        if (response.status === 405) {
+          throw new RegistryApiError(
+            `Registry does not allow deletion. The registry server needs to be configured with REGISTRY_STORAGE_DELETE_ENABLED=true.`,
+            response.status
+          );
+        } else {
+          throw new RegistryApiError(
+            `Failed to delete ${imageName}:${tag}: ${response.statusText}`,
+            response.status
+          );
+        }
+      }
+
+      // Clear related caches
+      apiCache.remove(`/api/v2/${imageName}/tags/list`);
+      apiCache.remove(`/api/v2/${imageName}/manifests/${tag}`);
+      apiCache.remove(`/api/v2/${imageName}/cumulative-size`);
+
+      return true;
+    } catch (error) {
+      console.error(`Error deleting ${imageName}:${tag}:`, error);
+      throw error;
+    }
   },
 
   /**
