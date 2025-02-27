@@ -10,7 +10,7 @@ export const RegistryHelp: FC = () => {
         onClick={() => setIsOpen(true)}
         aria-label="Registry configuration help"
       >
-        Need help configuring your registry?
+        Registry Help
       </button>
 
       {isOpen && (
@@ -47,12 +47,41 @@ export const RegistryHelp: FC = () => {
 
               <h3>Garbage Collection</h3>
               <p>
-                After deleting tags, you may need to run garbage collection to reclaim disk space:
+                After deleting tags, you need to run garbage collection to reclaim disk space.
+                This must be done directly on the server:
               </p>
 
               <pre className="code-block">
-                docker exec -it registry registry garbage-collect /etc/docker/registry/config.yml
+                {`# If running as a Docker container:
+docker exec -it registry registry garbage-collect /etc/docker/registry/config.yml
+
+# To also remove unreferenced blobs:
+docker exec -it registry registry garbage-collect --delete-untagged /etc/docker/registry/config.yml
+
+# After garbage collection, restart the registry:
+docker restart registry`}
               </pre>
+
+              <h3>Troubleshooting Deletion Issues</h3>
+              <p>
+                If you encounter "Not Found" errors when trying to delete tags, it may be because:
+              </p>
+
+              <ul>
+                <li>The manifest is corrupted or missing</li>
+                <li>The tag reference exists but the actual content doesn't</li>
+                <li>The registry's database is inconsistent</li>
+              </ul>
+
+              <p>
+                In these cases, you may need to:
+              </p>
+
+              <ol>
+                <li>Run garbage collection with the <code>--delete-untagged</code> flag</li>
+                <li>Restart the registry</li>
+                <li>If problems persist, you might need to rebuild the registry or restore from a backup</li>
+              </ol>
 
               <p>
                 For more information, see the <a href="https://docs.docker.com/registry/configuration/" target="_blank" rel="noopener noreferrer">Docker Registry documentation</a>.

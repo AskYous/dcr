@@ -33,6 +33,7 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
   const [tagToDelete, setTagToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [forceRemove, setForceRemove] = useState(false);
 
   // Refs for abort controllers
   const manifestAbortController = useRef<AbortController | null>(null);
@@ -163,7 +164,7 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
     setDeleteError(null);
 
     try {
-      await registryService.deleteImageTag(image.name, tagToDelete);
+      await registryService.deleteImageTag(image.name, tagToDelete, forceRemove);
 
       // Update the image tags list
       onImageUpdated();
@@ -176,14 +177,24 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
 
       // Close the confirmation dialog
       setTagToDelete(null);
+      setForceRemove(false);
     } catch (err) {
       console.error('Error deleting tag:', err);
 
       // Provide more helpful error messages
-      if (err instanceof RegistryApiError && err.status === 405) {
-        setDeleteError(
-          "The registry server doesn't allow deletion. The server administrator needs to enable deletion by setting REGISTRY_STORAGE_DELETE_ENABLED=true in the registry configuration."
-        );
+      if (err instanceof RegistryApiError) {
+        if (err.status === 405) {
+          setDeleteError(
+            "The registry server doesn't allow deletion. The server administrator needs to enable deletion by setting REGISTRY_STORAGE_DELETE_ENABLED=true in the registry configuration."
+          );
+        } else if (err.status === 404) {
+          setDeleteError(
+            "The manifest for this tag was not found. The tag might be corrupted. You can try using the 'Force Remove' option to remove it from the catalog."
+          );
+          setForceRemove(true);
+        } else {
+          setDeleteError(`API Error (${err.status}): ${err.message}`);
+        }
       } else {
         setDeleteError(err instanceof Error ? err.message : 'Failed to delete tag');
       }
@@ -384,13 +395,39 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
           <>
             <p>Are you sure you want to delete the tag <strong>{tagToDelete}</strong> from image <strong>{image.name}</strong>?</p>
             <p className="warning-text">This action cannot be undone. The tag will be permanently removed from the registry.</p>
+
+            {deleteError && (
+              <div className="error-message" role="alert">
+                {deleteError}
+              </div>
+            )}
+
+            {forceRemove && (
+              <div className="force-remove-option">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={forceRemove}
+                    onChange={(e) => setForceRemove(e.target.checked)}
+                  />
+                  Force Remove (Use this if the manifest is corrupted or missing)
+                </label>
+                <p className="force-remove-note">
+                  This will remove the tag from the catalog without requiring a valid manifest.
+                  Use with caution as it may leave orphaned data in the registry.
+                </p>
+              </div>
+            )}
           </>
         }
-        confirmLabel="Delete Tag"
+        confirmLabel={forceRemove ? "Force Remove Tag" : "Delete Tag"}
         isDestructive={true}
         isLoading={isDeleting}
         onConfirm={handleDeleteTag}
-        onCancel={() => setTagToDelete(null)}
+        onCancel={() => {
+          setTagToDelete(null);
+          setForceRemove(false);
+        }}
       />
     </>
   );
