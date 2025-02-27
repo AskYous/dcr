@@ -1,5 +1,7 @@
 import { FC, useEffect, useState } from 'react';
-import { DockerImage } from '../types';
+import { registryService } from '../services/registryService';
+import { DockerImage, ImageManifest } from '../types';
+import { formatDate, formatSize } from '../utils/formatters';
 
 interface ImageDetailsProps {
   image: DockerImage;
@@ -7,27 +9,11 @@ interface ImageDetailsProps {
   onClose: () => void;
 }
 
-interface ImageManifest {
-  schemaVersion?: number;
-  mediaType?: string;
-  config?: {
-    mediaType: string;
-    size: number;
-    digest: string;
-  };
-  layers?: Array<{
-    mediaType: string;
-    size: number;
-    digest: string;
-  }>;
-  history?: Array<{
-    created?: string;
-    created_by?: string;
-    comment?: string;
-  }>;
-  annotations?: Record<string, string>;
-  size?: number;
-  [key: string]: any;
+interface CumulativeSizeInfo {
+  totalSize: number;
+  uniqueSize: number;
+  tagSizes: Record<string, number>;
+  layerCount: number;
 }
 
 export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClose }) => {
@@ -37,31 +23,25 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
   const [manifest, setManifest] = useState<ImageManifest | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalSize, setTotalSize] = useState<number | null>(null);
+  const [cumulativeSize, setCumulativeSize] = useState<CumulativeSizeInfo | null>(null);
+  const [loadingCumulativeSize, setLoadingCumulativeSize] = useState(false);
 
   useEffect(() => {
-    console.log("ImageDetails mounted for image:", image.name);
-
     const fetchManifest = async () => {
       if (!selectedTag) return;
 
       setIsLoading(true);
       setError(null);
+      setTotalSize(null);
 
       try {
-        console.log(`Fetching manifest for ${image.name}:${selectedTag}`);
-        const response = await fetch(`/api/v2/${image.name}/manifests/${selectedTag}`, {
-          headers: {
-            'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch manifest: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        console.log("Manifest data:", data);
+        const data = await registryService.fetchImageManifest(image.name, selectedTag);
         setManifest(data);
+
+        // Calculate total size
+        const size = registryService.calculateImageSize(data);
+        setTotalSize(size);
       } catch (err) {
         console.error('Error fetching manifest:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch manifest');
@@ -73,53 +53,114 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
     fetchManifest();
   }, [image.name, selectedTag, registryUrl]);
 
-  const formatSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  };
+  // Fetch cumulative size information
+  useEffect(() => {
+    const fetchCumulativeSize = async () => {
+      if (image.tags.length === 0) return;
 
-  const formatDate = (dateString: string): string => {
-    try {
-      return new Date(dateString).toLocaleString();
-    } catch (e) {
-      return dateString;
-    }
-  };
+      setLoadingCumulativeSize(true);
 
-  console.log("Rendering ImageDetails modal");
+      try {
+        const result = await registryService.calculateCumulativeImageSize(
+          image.name,
+          image.tags,
+          true // Account for shared layers
+        );
+
+        setCumulativeSize({
+          totalSize: result.totalSize,
+          uniqueSize: result.uniqueSize,
+          tagSizes: result.tagSizes,
+          layerCount: result.layerDigests.size
+        });
+      } catch (err) {
+        console.error('Error calculating cumulative size:', err);
+        // Don't show error to user, just log it
+      } finally {
+        setLoadingCumulativeSize(false);
+      }
+    };
+
+    fetchCumulativeSize();
+  }, [image.name, image.tags]);
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{image.name}</h2>
+          <h2 id="modal-title">{image.name}</h2>
           <button className="close-button" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <div className="modal-body">
-          <div className="tag-selector">
-            <label htmlFor="tag-select">Select Tag:</label>
-            <select
-              id="tag-select"
-              value={selectedTag || ''}
-              onChange={e => setSelectedTag(e.target.value)}
-              disabled={isLoading}
-            >
-              {image.tags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
+          <div className="size-summary">
+            <div className="tag-selector">
+              <label htmlFor="tag-select">Select Tag:</label>
+              <select
+                id="tag-select"
+                value={selectedTag || ''}
+                onChange={e => setSelectedTag(e.target.value)}
+                disabled={isLoading}
+              >
+                {image.tags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+
+              {totalSize !== null && (
+                <div className="total-size">
+                  <span className="size-label">Tag Size:</span>
+                  <span className="size-value">{formatSize(totalSize)}</span>
+                </div>
+              )}
+            </div>
+
+            {cumulativeSize && (
+              <div className="cumulative-size-info">
+                <div className="size-item">
+                  <span className="size-label">All Tags (Raw):</span>
+                  <span className="size-value">{formatSize(cumulativeSize.totalSize)}</span>
+                  <span className="size-help" title="Total size of all tags without accounting for shared layers">ⓘ</span>
+                </div>
+                <div className="size-item">
+                  <span className="size-label">Storage Size:</span>
+                  <span className="size-value">{formatSize(cumulativeSize.uniqueSize)}</span>
+                  <span className="size-help" title="Actual storage used, accounting for shared layers">ⓘ</span>
+                </div>
+                <div className="size-item">
+                  <span className="size-label">Unique Layers:</span>
+                  <span className="size-value">{cumulativeSize.layerCount}</span>
+                </div>
+              </div>
+            )}
+
+            {loadingCumulativeSize && (
+              <div className="loading-cumulative">
+                <div className="mini-spinner"></div>
+                <span>Calculating storage size...</span>
+              </div>
+            )}
           </div>
 
           {isLoading ? (
-            <div className="loading-container small">
+            <div className="loading-container small" aria-live="polite">
               <div className="loading-spinner"></div>
               <p>Loading manifest...</p>
             </div>
           ) : error ? (
-            <div className="error-message">
+            <div className="error-message" role="alert">
               {error}
             </div>
           ) : manifest ? (
@@ -184,6 +225,12 @@ export const ImageDetails: FC<ImageDetailsProps> = ({ image, registryUrl, onClos
                           <div className="history-comment">
                             <span className="history-label">Comment:</span>
                             <span className="history-value">{item.comment}</span>
+                          </div>
+                        )}
+                        {item.empty_layer && (
+                          <div className="history-empty-layer">
+                            <span className="history-label">Empty Layer:</span>
+                            <span className="history-value">Yes</span>
                           </div>
                         )}
                       </div>

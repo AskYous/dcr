@@ -1,16 +1,13 @@
-import { useState } from 'react';
 import './App.css';
 import { AuthForm } from './components/AuthForm';
-import { DebugPanel } from './components/DebugPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { ImageList } from './components/ImageList';
 import { useAuth } from './hooks/useAuth';
 import { useDockerRegistry } from './hooks/useDockerRegistry';
+import { registryService } from './services/registryService';
 
 const App = () => {
-  const [showDebug, setShowDebug] = useState(false);
-
   const {
     credentials,
     authenticated,
@@ -28,15 +25,20 @@ const App = () => {
     refreshImages
   } = useDockerRegistry(credentials, authenticated);
 
+  const handleRefresh = () => {
+    // Clear cache and refresh images
+    registryService.clearCache();
+    refreshImages();
+  };
+
   return (
     <ErrorBoundary>
       <div className="docker-registry-app">
         <Header
           authenticated={authenticated}
           onLogout={handleLogout}
-          onRefresh={refreshImages}
+          onRefresh={handleRefresh}
           isLoading={isLoadingImages}
-          onToggleDebug={() => setShowDebug(!showDebug)}
         />
 
         <main className="app-content">
@@ -57,10 +59,6 @@ const App = () => {
             />
           )}
         </main>
-
-        {authenticated && showDebug && (
-          <DebugPanel registryUrl={credentials.registryUrl} onClose={() => setShowDebug(false)} />
-        )}
       </div>
     </ErrorBoundary>
   );

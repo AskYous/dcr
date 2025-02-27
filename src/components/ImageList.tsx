@@ -63,7 +63,7 @@ export const ImageList: FC<ImageListProps> = ({ images, isLoading, error, regist
           >
             <h3 className="image-name">{image.name}</h3>
             <div className="tags-container">
-              <h4 className="tags-header">Tags:</h4>
+              <h4 className="tags-header">Tags: <span className="tag-count">({image.tags.length})</span></h4>
               <div className="tags">
                 {image.tags.length > 0 ? (
                   image.tags.slice(0, 10).map((tag) => (

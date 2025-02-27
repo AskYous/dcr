@@ -5,15 +5,13 @@ interface HeaderProps {
   isLoading: boolean;
   onLogout: () => void;
   onRefresh: () => void;
-  onToggleDebug: () => void;
 }
 
 export const Header: FC<HeaderProps> = ({
   authenticated,
   isLoading,
   onLogout,
-  onRefresh,
-  onToggleDebug
+  onRefresh
 }) => {
   return (
     <header className="app-header">
@@ -25,17 +23,10 @@ export const Header: FC<HeaderProps> = ({
             onClick={onRefresh}
             disabled={isLoading}
             className="action-button refresh"
-            aria-label="Refresh images"
+            aria-label="Refresh images and clear cache"
+            title="Refresh images and clear cache"
           >
-            {isLoading ? "Refreshing..." : "Refresh"}
-          </button>
-
-          <button
-            onClick={onToggleDebug}
-            className="action-button debug"
-            aria-label="Toggle debug panel"
-          >
-            Debug
+            {isLoading ? "Refreshing..." : "Refresh & Clear Cache"}
           </button>
 
           <button
